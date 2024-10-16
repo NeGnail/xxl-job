@@ -44,14 +44,14 @@ public class XxlJobServiceImpl implements XxlJobService {
 	private XxlJobLogGlueDao xxlJobLogGlueDao;
 	@Resource
 	private XxlJobLogReportDao xxlJobLogReportDao;
-	
+
 	@Override
 	public Map<String, Object> pageList(int start, int length, int jobGroup, int triggerStatus, String jobDesc, String executorHandler, String author) {
 
 		// page list
 		List<XxlJobInfo> list = xxlJobInfoDao.pageList(start, length, jobGroup, triggerStatus, jobDesc, executorHandler, author);
 		int list_count = xxlJobInfoDao.pageListCount(start, length, jobGroup, triggerStatus, jobDesc, executorHandler, author);
-		
+
 		// package result
 		Map<String, Object> maps = new HashMap<String, Object>();
 	    maps.put("recordsTotal", list_count);		// 总记录数
@@ -360,7 +360,7 @@ public class XxlJobServiceImpl implements XxlJobService {
 		if (xxlJobInfo == null) {
 			return new ReturnT<String>(ReturnT.FAIL.getCode(), I18nUtil.getString("jobinfo_glue_jobid_unvalid"));
 		}
-		if (!hasPermission(loginUser, xxlJobInfo.getJobGroup())) {
+		if (!hasPermission(loginUser, xxlJobInfo.getJobGroup(), xxlJobInfo.getChildJobId())) {
 			return new ReturnT<String>(ReturnT.FAIL.getCode(), I18nUtil.getString("system_permission_limit"));
 		}
 
@@ -373,7 +373,7 @@ public class XxlJobServiceImpl implements XxlJobService {
 		return ReturnT.SUCCESS;
 	}
 
-	private boolean hasPermission(XxlJobUser loginUser, int jobGroup){
+	private boolean hasPermission(XxlJobUser loginUser, int jobGroup, String childJobIds){
 		if (loginUser.getRole() == 1) {
 			return true;
 		}
@@ -381,7 +381,26 @@ public class XxlJobServiceImpl implements XxlJobService {
 		if (loginUser.getPermission()!=null && loginUser.getPermission().trim().length()>0) {
 			groupIdStrs = Arrays.asList(loginUser.getPermission().trim().split(","));
 		}
-		return groupIdStrs.contains(String.valueOf(jobGroup));
+
+		if (!groupIdStrs.contains(String.valueOf(jobGroup))){
+			return false;
+		}
+
+		if (childJobIds != null && childJobIds.trim().length() > 0){
+			String[] childJobIdsArray = childJobIds.split(",");
+			for (int i = 0; i < childJobIdsArray.length; i++) {
+				int childJobId = (childJobIdsArray[i]!=null && childJobIdsArray[i].trim().length()>0 && isNumeric(childJobIdsArray[i]))?Integer.valueOf(childJobIdsArray[i]):-1;
+				if(childJobId > 0){
+					XxlJobInfo xxlJobInfo = xxlJobInfoDao.loadById(childJobId);
+					int childJobInfoGroup = xxlJobInfo.getJobGroup();
+					if (!groupIdStrs.contains(String.valueOf(childJobInfoGroup))){
+						return false;
+					}
+				}
+			}
+		}
+
+		return true;
 	}
 
 	@Override
